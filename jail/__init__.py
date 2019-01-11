@@ -1,6 +1,12 @@
 import typing
 import ctypes
+import itertools
+
 from jail.libc import dll
+
+NULL_BYTES = b"\x00"
+MAX_INT = 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2 - 1
+MIN_INT = - 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2
 
 in_addr_t = ctypes.c_uint32
 
@@ -30,25 +36,207 @@ class Iovec(ctypes.Structure):
     ]
 
 
-class Jiov:
-    
-    params: typing.Tuple[typing.Tuple[
-        bytes,
-        typing.Union[bytes, int, typing.Any]
-    ], ...]
+class IovecKey:
+
+    def __init__(self, value: typing.Union[str, bytes]) -> None:
+        if isinstance(value, bytes) is True:
+            self.value = value
+        elif isinstance(value, str) is True:
+            self.value = value.encode()
+        else:
+            raise KeyError(
+                f"bytes or string expected, but got: {type(value).__name__}"
+            )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def __str__(self) -> str:
+        return self.value.decode()
+
+    def __bytes__(self) -> bytes:
+        return self.value
+
+    def __len__(self) -> int:
+        return len(self.value)
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    @property
+    def iovec(self) -> ctypes.c_void_p:
+        return (Iovec(
+            ctypes.cast(
+                ctypes.c_char_p(bytes(self) + NULL_BYTES),
+                ctypes.c_void_p
+            ),
+            len(self) + len(NULL_BYTES)
+        ))
+
+
+class IovecValue:
+
+    value: typing.Optional[typing.Union[bytes, int]]
+
+    def __init__(
+        self,
+        value: typing.Optional[typing.Union[bytes, int, str]]
+    ) -> None:
+        if isinstance(value, str):
+            self.value = value.encode()
+        else:
+            self.value = value
+
+    def __repr__(self) -> str:
+        return f"<IovecValue: {str(self)}>"
+
+    def __len__(self) -> int:
+        if self.value is None:
+            return 0
+        elif isinstance(self.value, int):
+            return ctypes.sizeof(ctypes.c_int)
+        return len(self.value)
+
+    def __str__(self) -> str:
+        if isinstance(self.value, bytes) is True:
+            return self.value.decode()
+        else:
+            return str(self.value)
+
+    @property
+    def iovec(self) -> typing.Union[ctypes.POINTER, int]:
+
+        # XXX: Check the type of the `security.jail.param.$key`
+        # sysctl and verify that the value is of the correct
+        # type
+
+        if self.value is None:
+            return Iovec(ctypes.c_void_p(), 0)
+
+        elif isinstance(self.value, bytes) is True:
+            # XXX: Read the `security.jail.param.$key` sysctl, parse it as
+            # an integer and check that the value length does not exceed
+            # that. Find out if terminating NUL-byte is included?.
+            return Iovec(
+                ctypes.cast(
+                    ctypes.c_char_p(self.value + NULL_BYTES),
+                    ctypes.c_void_p
+                ),
+                self.__len__() + len(NULL_BYTES)
+            )
+
+        elif isinstance(self.value, int) is True:
+            if not MIN_INT <= self.value <= MAX_INT:
+                raise OverflowError("Integer parameter out of range")
+            return Iovec(
+                ctypes.cast(
+                    ctypes.POINTER(ctypes.c_int)(ctypes.c_int(self.value)),
+                    ctypes.c_void_p
+                ),
+                self.__len__()
+            )
+
+        else:
+            # XXX: IP Addrs, JailSys Enums (new, inherit, disabled)
+            raise NotImplementedError
+
+
+class ByteDict(dict):
+    """A dict with bytes as keys."""
+
+    def __init__(
+        self,
+        data: typing.Dict[
+            typing.Union[bytes, str],
+            IovecValue
+        ]={}
+    ) -> None:
+        super().__init__(data)
+
+    def __setitem__(
+        self,
+        key: typing.Union[bytes, str],
+        value: IovecValue
+    ) -> None:
+        super().__setitem__(self.__getkey(key), value)
+
+    def __getitem__(
+        self,
+        key: typing.Union[bytes, str]
+    ) -> IovecValue:
+        return super().__getitem__(self.__getkey(key))
+
+    def _getkey(self, key: typing.Union[bytes, str]) -> bytes:
+        if isinstance(key, bytes) is False:
+            return key
+        elif isinstance(key, str) is True:
+            return key.encode()
+        raise KeyError("string or bytes expected")
+
+
+class JiovData(dict):
+    """Jiov data storage and wrapper."""
+
+    def __init__(
+        self,
+        data: typing.Dict[
+            typing.Union[IovecKey, bytes, str],
+            IovecValue
+        ]
+    ) -> None:
+        super().__init__()
+        for key, value in data.items():
+            self[key] = data[key]
+
+    def __setitem__(
+        self,
+        key: typing.Union[IovecKey, bytes, str],
+        value: typing.Optional[typing.Union[bytes, int, IovecValue]]
+    ) -> None:
+        super().__setitem__(IovecKey(key), IovecValue(value))
+
+    def __getitem__(
+        self,
+        key: typing.Union[IovecKey, bytes, str]
+    ) -> IovecValue:
+        return super().__getitem__(
+            (key if isinstance(key, IovecKey) else IovecKey(key))
+        )
+
+    def keys(self) -> typing.KeysView[IovecKey]:
+        return typing.cast(
+            typing.KeysView[IovecKey],
+            (self._getkey(x) for x in super().keys())
+        )
+
+    def items(self) -> typing.ItemsView[IovecKey, IovecValue]:
+        return typing.cast(
+            typing.ItemsView[IovecKey, IovecValue],
+            ((x, self[x]) for x in self.keys())
+        )
+
+    def _getkey(self, key: typing.Union[IovecKey, bytes, str]) -> bytes:
+        if isinstance(key, IovecKey) is True:
+            return key
+        return IovecKey(super()._getkey(key))
+
+
+class Jiov(JiovData):
+
+    errmsg: ctypes.c_char*256
     
     def __init__(
         self,
-        params: typing.Tuple[typing.Tuple[
-            bytes,
-            typing.Union[bytes, int, typing.Any]
-        ], ...]
+        params: typing.Dict[
+            typing.Union[str, bytes],
+            IovecValue
+        ]
     ) -> None:
-        self.params = params
         self.errmsg = ctypes.create_string_buffer(256)
+        super().__init__(params)
 
     def __len__(self) -> int:
-        return len(self.params)*2 + 2
+        return (dict.__len__(self) * 2) + 2
 
     @property
     def pointer(self):
@@ -56,60 +244,29 @@ class Jiov:
 
     @property
     def struct(self) -> typing.Iterator[Iovec]:
-        params = self.params
-        items = ()
-        for i in range(len(params)):
-            
-            # key
-            base = ctypes.c_char_p(params[i][0])
-            items += (Iovec(
-                ctypes.cast(base, ctypes.c_void_p),
-                len(params[i][0])
-            ),)
+        items = []
+        for key, value in self.items():
+            items.append(key.iovec)
+            items.append(value.iovec)
 
-            # XXX: Check the type of the `security.jail.param.$key`
-            # sysctl and verify that the value is of the correct
-            # type
-            
-            # value
-            if isinstance(params[i][1], bytes):
-                # XXX: Read the `security.jail.param.$key` sysctl, parse it as
-                # an integer and check that the value length does not exceed
-                # that. Find out if terminating NUL-byte is included?.
-                base = ctypes.c_char_p(params[i][1])
-                items += (Iovec(
-                    ctypes.cast(base, ctypes.c_void_p),
-                    len(params[i][1])
-                ),)
-            elif isinstance(params[i][1], int):
-                MAX_INT = 2**(8*ctypes.sizeof(ctypes.c_int)) // 2 - 1
-                MIN_INT = - 2**(8*ctypes.sizeof(ctypes.c_int)) // 2
-                if not MIN_INT <= params[i][1] <= MAX_INT:
-                    raise OverflowError("Integer parameter out of range")
-
-                base = ctypes.POINTER(ctypes.c_int)(ctypes.c_int(params[i][1]))
-                items += (Iovec(
-                    ctypes.cast(base, ctypes.c_void_p),
-                    ctypes.sizeof(ctypes.c_int)
-                ),)
-            elif params[i][1] is None:
-                # XXX: sysctl type is int, even though this is NoneType.
-                # Type safety is hard.
-                items += (Iovec(ctypes.c_void_p(), 0),)
-            else:
-                # XXX: IP Addrs, JailSys Enums (new, inherit, disabled)
-                raise NotImplemented
-        
-        items += (
+        items.append(
             Iovec(
-                ctypes.cast(ctypes.c_char_p(b"errmsg\x00"), ctypes.c_void_p),
+                ctypes.cast(
+                    ctypes.c_char_p(b"errmsg\x00"),
+                    ctypes.c_void_p
+                ),
                 len(b"errmsg\x00")
-            ),
+            )
+        )
+        
+        items.append(
             Iovec(
-                ctypes.cast(ctypes.POINTER(ctypes.c_char_p)(self.errmsg),
-                    ctypes.c_void_p),
+                ctypes.cast(
+                    ctypes.POINTER(ctypes.c_char_p)(self.errmsg),
+                    ctypes.c_void_p
+                ),
                 len(self.errmsg)
-            ),
+            )
         )
 
         return (Iovec * len(items))(*items)
