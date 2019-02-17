@@ -2,6 +2,9 @@ import typing
 import ctypes
 import itertools
 
+import freebsd_sysctl
+import freebsd_sysctl.types
+
 from jail.libc import dll
 
 NULL_BYTES = b"\x00"
@@ -76,16 +79,37 @@ class IovecKey:
 
 class IovecValue:
 
-    value: typing.Optional[typing.Union[bytes, int]]
+    _value: typing.Optional[typing.Union[bytes, int]]
 
     def __init__(
         self,
         value: typing.Optional[typing.Union[bytes, int, str]]
     ) -> None:
-        if isinstance(value, str):
-            self.value = value.encode()
+        self.value = value
+
+    @property
+    def value(self) -> typing.Optional[typing.Union[bytes, int]]:
+        value = self._value
+        if isinstance(value, int) or (value is None):
+            return value
+        return value + (NULL_BYTES * (value.endswith(NULL_BYTES) is False))
+
+    @property
+    def raw_value(self) -> typing.Optional[typing.Union[bytes, int]]:
+        return self._value
+
+    @value.setter
+    def value(self, value: typing.Optional[typing.Union[bytes, int]]) -> None:
+        if value is None:
+            self._value = None
+        elif isinstance(value, str):
+            self._value = str(value.encode())
+        elif isinstance(value, int):
+            self._value = int(value)
+        elif isinstance(value, bytes):
+            self._value = value
         else:
-            self.value = value
+            raise TypeError("IovecValue accepts bytes, int, str or None")
 
     def __repr__(self) -> str:
         return f"<IovecValue: {str(self)}>"
@@ -106,17 +130,10 @@ class IovecValue:
     @property
     def iovec(self) -> typing.Union[ctypes.POINTER, int]:
 
-        # XXX: Check the type of the `security.jail.param.$key`
-        # sysctl and verify that the value is of the correct
-        # type
-
         if self.value is None:
             return Iovec(ctypes.c_void_p(), 0)
 
         elif isinstance(self.value, bytes) is True:
-            # XXX: Read the `security.jail.param.$key` sysctl, parse it as
-            # an integer and check that the value length does not exceed
-            # that. Find out if terminating NUL-byte is included?.
             return Iovec(
                 ctypes.cast(
                     ctypes.c_char_p(self.value + NULL_BYTES),
@@ -158,6 +175,20 @@ class ByteDict(dict):
         key: typing.Union[bytes, str],
         value: IovecValue
     ) -> None:
+        if isinstance(value, IovecValue) is False:
+            raise TypeError("IovecValue expected")
+
+        # XXX: cache sysctls
+        sysctl = freebsd_sysctl.Sysctl(self._getkey(key).decode())
+
+        if sysctl.ctl_type == freebsd_sysctl.types.STRING:
+            if isinstance(value.value, bytes) is False:
+                raise TypeError("IovecValue of bytes expected")
+
+            max_size = int(sysctl.value)
+            if len(value.value) > max_size:
+                raise ValueError("byte sequence too long")
+
         super().__setitem__(self.__getkey(key), value)
 
     def __getitem__(
