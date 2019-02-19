@@ -30,30 +30,9 @@ import freebsd_sysctl
 import freebsd_sysctl.types
 
 from jail.libc import dll
+import jail.types
 
 NULL_BYTES = b"\x00"
-MAX_INT = 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2 - 1
-MIN_INT = - 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2
-
-in_addr_t = ctypes.c_uint32
-
-
-class in_addr(ctypes.Structure):
-    _fields_ = [('s_addr', in_addr_t)]
-
-
-class in6_addr_U(ctypes.Union):
-    _fields_ = [
-        ('__u6_addr8', ctypes.c_uint8 * 16),
-        ('__u6_addr16', ctypes.c_uint16 * 8),
-        ('__u6_addr32', ctypes.c_uint32 * 4),
-    ]
-
-
-class in6_addr(ctypes.Structure):
-    _fields_ = [
-        ('__in6_u', in6_addr_U),
-    ]
 
 
 class Iovec(ctypes.Structure):
@@ -167,7 +146,7 @@ class IovecValue:
             )
 
         elif isinstance(self.value, int) is True:
-            if not MIN_INT <= self.value <= MAX_INT:
+            if not jail.types.MIN_INT <= self.value <= jail.types.MAX_INT:
                 raise OverflowError("Integer parameter out of range")
             return Iovec(
                 ctypes.cast(
