@@ -55,7 +55,8 @@ class IovecKey:
             )
 
     def __repr__(self) -> str:
-        return self.__str__()
+        return self.__str__();
+        #return f"<{self.__class__.__name__}: \"{str(self)}\">"
 
     def __str__(self) -> str:
         return self.value.decode()
@@ -115,7 +116,8 @@ class IovecValue:
             raise TypeError("IovecValue accepts bytes, int, str or None")
 
     def __repr__(self) -> str:
-        return f"<IovecValue: {str(self)}>"
+        return self.__str__();
+        #return f"<{self.__class__.__name__}: \"{str(self)}\">"
 
     def __len__(self) -> int:
         if self.value is None:
