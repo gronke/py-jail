@@ -96,7 +96,7 @@ class IovecValue:
         value = self._value
         if isinstance(value, int) or (value is None):
             return value
-        return value + (NULL_BYTES * (value.endswith(NULL_BYTES) is False))
+        return value + (NULL_BYTES * (value[-1:] == NULL_BYTES))
 
     @property
     def raw_value(self) -> typing.Optional[typing.Union[bytes, int]]:
