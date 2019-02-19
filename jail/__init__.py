@@ -306,3 +306,11 @@ class Jiov(JiovData):
         )
 
         return (Iovec * len(items))(*items)
+
+
+def get_jid_by_name(name: typing.Union[str, bytes]) -> int:
+    if (isinstance(name, str) or isinstance(name, bytes)) is False:
+        raise TypeError("bytes required")
+
+    jiov = jail.Jiov(dict(name=name))
+    return int(jail.dll.jail_get(jiov.pointer, len(jiov), 0))
