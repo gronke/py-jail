@@ -107,7 +107,7 @@ class IovecValue:
         if value is None:
             self._value = None
         elif isinstance(value, str):
-            self._value = str(value.encode())
+            self._value = value.encode()
         elif isinstance(value, int):
             self._value = int(value)
         elif isinstance(value, bytes):
