@@ -1,1 +1,1 @@
-freebsd_sysctl=0.0.4
+freebsd_sysctl==0.0.5
