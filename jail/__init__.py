@@ -322,3 +322,11 @@ def get_jid_by_name(name: typing.Union[str, bytes]) -> int:
 
     jiov = jail.Jiov(dict(name=name))
     return int(jail.dll.jail_get(jiov.pointer, len(jiov), 0))
+
+def is_jid_dying(jid: int) -> bool:
+    jiov = jail.Jiov(dict(jid=jid,dying=0))
+    JAIL_DYING = 0x08
+    if jail.dll.jail_get(jiov.pointer, len(jiov), JAIL_DYING) < 0:
+        return False  # jid does not exist
+    return (int(jiov[IovecKey("dying")]) > 0) is True
+
