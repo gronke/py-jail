@@ -135,6 +135,11 @@ class IovecValue:
         else:
             return str(self.value)
 
+    def __int__(self) -> int:
+        if isinstance(self.value, int) is True:
+            return int(self.value)
+        raise ValueError("cannot convert value to int")
+
     @property
     def iovec(self) -> typing.Union[ctypes.POINTER, int]:
 
