@@ -70,6 +70,9 @@ class IovecKey:
     def __hash__(self) -> int:
         return hash(self.value)
 
+    def __eq__(self, other: 'IovecKey') -> bool:
+        return self.__hash__() == other.__hash__()
+
     @property
     def iovec(self) -> ctypes.c_void_p:
         return (Iovec(
