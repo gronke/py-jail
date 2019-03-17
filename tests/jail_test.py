@@ -48,6 +48,8 @@ def test_jail_remove():
     )
     try:
         jail.dll.jail_remove(jid)
+        while jail.is_jid_dying(jid) is True:
+            continue
     except:
         subprocess.check_output([jail_command, "-r", str(jid)])
         raise
