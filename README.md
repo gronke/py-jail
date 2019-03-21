@@ -56,5 +56,5 @@ jiov = jail.Jiov({
 	"ip6.addr": ipaddress.IPv6Address("2001:db8:10C::42")
 })
 
->>> jail.dll.jail_set(jiov.pointer, len(jiov), 1)
+jail.dll.jail_set(jiov.pointer, len(jiov), 1)
 ```
