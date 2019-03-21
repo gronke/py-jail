@@ -84,29 +84,33 @@ class IovecKey:
         ))
 
 
+RawIovecValue = typing.Optional[typing.Union[bytes, int]]
+IovevValueInput = typing.Union[RawIovecValue, str]
+
+
 class IovecValue:
 
-    _value: typing.Optional[typing.Union[bytes, int]]
+    _value: RawIovecValue
 
     def __init__(
         self,
-        value: typing.Optional[typing.Union[bytes, int, str]]
+        value: IovevValueInput
     ) -> None:
         self.value = value
 
     @property
-    def value(self) -> typing.Optional[typing.Union[bytes, int]]:
+    def value(self) -> RawIovecValue:
         value = self._value
         if isinstance(value, int) or (value is None):
             return value
         return value + (NULL_BYTES * (value[-1:] == NULL_BYTES))
 
     @property
-    def raw_value(self) -> typing.Optional[typing.Union[bytes, int]]:
+    def raw_value(self) -> RawIovecValue:
         return self._value
 
     @value.setter
-    def value(self, value: typing.Optional[typing.Union[bytes, int]]) -> None:
+    def value(self, value: RawIovecValue) -> None:
         if value is None:
             self._value = None
         elif isinstance(value, str):
