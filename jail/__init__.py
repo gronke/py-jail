@@ -178,6 +178,8 @@ class IovecValue:
 class ByteDict(dict):
     """A dict with bytes as keys."""
 
+    cached_sysctls: typing.Dict[str, freebsd_sysctl.Sysctl] = {}
+
     def __init__(
         self,
         data: typing.Dict[
@@ -195,8 +197,7 @@ class ByteDict(dict):
         if isinstance(value, IovecValue) is False:
             raise TypeError("IovecValue expected")
 
-        # XXX: cache sysctls
-        sysctl = freebsd_sysctl.Sysctl(self._getkey(key).decode())
+        sysctl = self.__get_sysctl(key)
 
         if sysctl.ctl_type == freebsd_sysctl.types.STRING:
             if isinstance(value.value, bytes) is False:
@@ -208,17 +209,23 @@ class ByteDict(dict):
 
         super().__setitem__(self.__getkey(key), value)
 
+    def __get_sysctl(self, key: str) -> freebsd_sysctl.Sysctl:
+        _key = self.__getkey(key).decode("UTF-8")
+        if _key not in self.cached_sysctls.keys():
+            self.cached_sysctls[_key] = freebsd_sysctl.Sysctl(_key)
+        return self.cached_sysctls[_key]
+
     def __getitem__(
         self,
         key: typing.Union[bytes, str]
     ) -> IovecValue:
         return super().__getitem__(self.__getkey(key))
 
-    def _getkey(self, key: typing.Union[bytes, str]) -> bytes:
+    def __getkey(self, key: typing.Union[bytes, str]) -> bytes:
         if isinstance(key, bytes) is False:
             return key
         elif isinstance(key, str) is True:
-            return key.encode()
+            return key.encode("UTF-8")
         raise KeyError("string or bytes expected")
 
 
@@ -254,7 +261,7 @@ class JiovData(dict):
     def keys(self) -> typing.KeysView[IovecKey]:
         return typing.cast(
             typing.KeysView[IovecKey],
-            (self._getkey(x) for x in super().keys())
+            (self.__getkey(x) for x in super().keys())
         )
 
     def items(self) -> typing.ItemsView[IovecKey, IovecValue]:
@@ -263,10 +270,10 @@ class JiovData(dict):
             ((x, self[x]) for x in self.keys())
         )
 
-    def _getkey(self, key: typing.Union[IovecKey, bytes, str]) -> bytes:
+    def __getkey(self, key: typing.Union[IovecKey, bytes, str]) -> bytes:
         if isinstance(key, IovecKey) is True:
             return key
-        return IovecKey(super()._getkey(key))
+        return IovecKey(super().__getkey(key))
 
 
 class Jiov(JiovData):
