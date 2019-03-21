@@ -24,6 +24,8 @@
 """Types used by jail (2)."""
 import typing
 import ctypes
+import ipaddress
+import struct
 
 MAX_INT = 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2 - 1
 MIN_INT = - 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2
@@ -31,7 +33,7 @@ MIN_INT = - 2 ** (8 * ctypes.sizeof(ctypes.c_int)) // 2
 in_addr_t = ctypes.c_uint32
 
 
-class in_addr(ctypes.Structure):
+class in_addr(ctypes.BigEndianStructure):
     _fields_ = [('s_addr', in_addr_t)]
 
 
@@ -47,3 +49,10 @@ class in6_addr(ctypes.Structure):
     _fields_ = [
         ('__in6_u', in6_addr_U),
     ]
+
+
+def in6_addr_U_from_ip(ip6_address: ipaddress.IPv6Address) -> in6_addr_U:
+	return in6_addr_U(struct.unpack(
+		"B"*16,
+		bytes.fromhex(ip6_address.exploded.replace(":",""))
+	))

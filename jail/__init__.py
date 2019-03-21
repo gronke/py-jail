@@ -25,6 +25,7 @@
 import typing
 import ctypes
 import itertools
+import ipaddress
 
 import freebsd_sysctl
 import freebsd_sysctl.types
@@ -33,6 +34,7 @@ from jail.libc import dll
 import jail.types
 
 NULL_BYTES = b"\x00"
+JAIL_MAX_AF_IPS = freebsd_sysctl.Sysctl("security.jail.jail_max_af_ips").value
 
 
 class Iovec(ctypes.Structure):
@@ -84,8 +86,19 @@ class IovecKey:
         ))
 
 
-RawIovecValue = typing.Optional[typing.Union[bytes, int]]
+RawIovecValue = typing.Optional[typing.Union[
+    bytes,
+    int,
+    typing.List[ipaddress.IPv4Address],
+    typing.List[ipaddress.IPv6Address]
+]]
 IovevValueInput = typing.Union[RawIovecValue, str]
+IovecValueOutput = typing.Union[
+    bytes,
+    int,
+    jail.types.in_addr,
+    jail.types.in6_addr
+]
 
 
 class IovecValue:
@@ -101,7 +114,22 @@ class IovecValue:
     @property
     def value(self) -> RawIovecValue:
         value = self._value
-        if isinstance(value, int) or (value is None):
+        if isinstance(value, list):
+            if len(value) == 0:
+                return None
+            elif len(value) > JAIL_MAX_AF_IPS:
+                raise ValueError("Too many IPs (max {JAIL_MAX_AF_IPS}")
+            elif isinstance(value[0], ipaddress.IPv4Address):
+                list_type = jail.types.in_addr
+                value_type = int
+            elif isinstance(value[0], ipaddress.IPv6Address):
+                list_type = jail.types.in6_addr
+                value_type = jail.types.in6_addr_U_from_ip
+            else:
+                raise TypeError("Expected IP Address")
+            output_type = list_type * len(value)
+            return output_type(*[list_type(value_type(x)) for x in value])
+        elif isinstance(value, int) or (value is None):
             return value
         return value + (NULL_BYTES * (value[-1:] == NULL_BYTES))
 
@@ -111,16 +139,23 @@ class IovecValue:
 
     @value.setter
     def value(self, value: RawIovecValue) -> None:
-        if value is None:
-            self._value = None
-        elif isinstance(value, str):
-            self._value = value.encode()
-        elif isinstance(value, int):
-            self._value = int(value)
-        elif isinstance(value, bytes):
+        if isinstance(value, list):
             self._value = value
         else:
-            raise TypeError("IovecValue accepts bytes, int, str or None")
+            self._value = self.__convert_value(value)
+
+    @staticmethod
+    def __convert_value(value: IovevValueInput) -> RawIovecValue:
+        if value is None:
+            return None
+        elif isinstance(value, str):
+            return value.encode()
+        elif isinstance(value, int):
+            return int(value)
+        elif isinstance(value, bytes):
+            return value
+        else:
+            raise TypeError("IovecValue accepts list, bytes, int, str or None")
 
     def __repr__(self) -> str:
         return self.__str__();
@@ -168,6 +203,18 @@ class IovecValue:
                     ctypes.c_void_p
                 ),
                 self.__len__()
+            )
+
+        elif isinstance(self._value, list) is True:
+            if len(self._value) == 0:
+                return Iovec(ctypes.c_void_p(), 0)
+            output_type = type(self.value[0])
+            return Iovec(
+                ctypes.cast(
+                    ctypes.POINTER(output_type)(self.value),
+                    ctypes.c_void_p
+                ),
+                ctypes.sizeof(output_type)
             )
 
         else:
