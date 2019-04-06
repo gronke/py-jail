@@ -215,7 +215,7 @@ class IovecValue:
                     ctypes.POINTER(output_type)(self.value),
                     ctypes.c_void_p
                 ),
-                ctypes.sizeof(output_type)
+                ctypes.sizeof(output_type * len(self._value))
             )
 
         else:
