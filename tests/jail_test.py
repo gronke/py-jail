@@ -26,6 +26,7 @@ import pytest
 import subprocess
 import sys
 import ipaddress
+import random
 import ctypes
 
 import jail
@@ -92,6 +93,43 @@ def test_configure_ipv4_addresses_for_non_vnet_jail(
         assert str(ipv4_address) in subprocess.check_output(
             [jexec_command, str(jid), "/ifconfig", bridge_interface]
         ).decode("UTF-8")
+    finally:
+        subprocess.check_output([jail_command, "-r", str(jid)])
+
+def test_configure_miltiple_ipv4_addresses_for_non_vnet_jail(
+    ipv4_address: ipaddress.IPv4Address,
+    bridge_interface: str
+) -> None:
+    ip1 = ipaddress.IPv4Address("192.0.2." + str(random.randint(1,254)))
+    ip2 = ipaddress.IPv4Address("192.0.2." + str(random.randint(1,254)))
+
+    print("IPS", str(ip1), str(ip2))
+    subprocess.check_output(
+        [ifconfig_command, bridge_interface, "inet", str(ip1), "alias"]
+    )
+    subprocess.check_output(
+        [ifconfig_command, bridge_interface, "inet", str(ip2), "alias"]
+    )
+    jiov = jail.Jiov({
+        "persist": None,
+        "path": "/rescue",
+        "ip4.addr": [ip1, ip2]
+    })
+    jid = jail.dll.jail_set(jiov.pointer, len(jiov), 1)
+    try:
+        assert isinstance(jid, int)
+        assert jid > 0
+
+        stdout = subprocess.check_output(
+            [jexec_command, str(jid), "/ifconfig", bridge_interface]
+        ).decode("UTF-8")
+        print(stdout)
+        print(subprocess.check_output(
+            ["jls", "-n"]
+        ).decode("UTF-8"))
+
+        assert str(ip1) in stdout
+        assert str(ip2) in stdout
     finally:
         subprocess.check_output([jail_command, "-r", str(jid)])
 
