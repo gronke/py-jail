@@ -162,11 +162,12 @@ class IovecValue:
         #return f"<{self.__class__.__name__}: \"{str(self)}\">"
 
     def __len__(self) -> int:
-        if self.value is None:
+        value = self.value
+        if value is None:
             return 0
-        elif isinstance(self.value, int):
+        elif isinstance(value, int):
             return ctypes.sizeof(ctypes.c_int)
-        return len(self.value)
+        return len(value)
 
     def __str__(self) -> str:
         if isinstance(self.value, bytes) is True:
