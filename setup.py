@@ -19,7 +19,7 @@ def _read_requirements(
             os.path.dirname(os.path.abspath(__file__)),
             filename
         )
-    reqs = list(parse_requirements(filename, session="ioc_cli"))
+    reqs = list(parse_requirements(filename, session="jail"))
     return dict(
         install_requires=list(map(lambda x: f"{x.name}{x.specifier}", reqs)),
         dependency_links=list(map(
