@@ -14,6 +14,11 @@ except ModuleNotFoundError:
 def _read_requirements(
     filename: str="requirements.txt"
 ) -> typing.Dict[str, typing.List[str]]:
+    if filename.startswith("/") is False:
+        filename = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            filename
+        )
     reqs = list(parse_requirements(filename, session="ioc_cli"))
     return dict(
         install_requires=list(map(lambda x: f"{x.name}{x.specifier}", reqs)),
