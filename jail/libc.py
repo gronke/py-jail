@@ -22,5 +22,9 @@
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 """libc abstraction."""
-import ctypes.util
-dll = ctypes.CDLL("libc.so.7")
+import ctypes
+try:
+    dll = ctypes.CDLL("libc.so.7")
+except OSError:
+    import ctypes.util
+    dll = ctypes.CDLL(str(ctypes.util.find_library("c")), use_errno=True)
