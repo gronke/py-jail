@@ -1,0 +1,12 @@
+task:
+  freebsd_instance:
+    matrix:
+      image: freebsd-12-1-release-amd64
+  install_script:
+    - mount -t fdescfs null /dev/fd
+    - pkg install -y python3
+    - python3 -m ensurepip
+    - pip install -r requirements-dev.txt
+    - pip install -r requirements.txt
+  test_script:
+    - pytest tests
