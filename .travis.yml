@@ -3,7 +3,7 @@ python:
   - "3.7"
 sudo: false
 install:
-  - make install-travis
+  - make install-python-requirements-dev
 script:
   - make check
 notifications:
