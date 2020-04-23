@@ -58,3 +58,26 @@ jiov = jail.Jiov({
 
 jail.dll.jail_set(jiov.pointer, len(jiov), 1)
 ```
+
+## Development
+
+### Unit Tests
+
+Unit tests may run on FreeBSD or HardenedBSD.
+
+### Static Code Analysis
+
+The project enforces PEP-8 code style and MyPy strong typing via flake8, that is required to pass before merging any changes.
+Together with Bandit checks for common security issues the static code analysis can be ran on Linux and BSD code execution.
+
+```
+make install-dev
+make check
+```
+
+### Releases
+
+We try to *manually* keep a [Changelog](CHANGELOG.md), following the style on [changelog.md](https://changelog.md).
+New releases are tagged according to [Semver](https://semver.org/), released on [PyPi](https://pypi.org/project/libioc/), and published as [port](https://github.com/bsdci/ports).
+
+To get a port published, we need to [create a Bugzilla Issue in the Ports category](https://bugs.freebsd.org/bugzilla/enter_bug.cgi?component=Individual%20Port%28s%29&product=Ports%20%26%20Packages)
