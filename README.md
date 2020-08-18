@@ -3,6 +3,11 @@ py-jail
 
 A native Python wrapper for FreeBSD jails using libc.
 
+## Build Status
+
+| Unit Tests | [![Unit Tests](https://api.cirrus-ci.com/github/gronke/py-jail.svg)](https://cirrus-ci.com/github/gronke/py-jail) |
+| Code Style | [![Code Style](https://travis-ci.org/gronke/py-jail.svg?branch=master)](https://travis-ci.org/gronke/py-jail) |
+
 ## Usage
 
 ### jail_set
