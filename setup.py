@@ -11,6 +11,13 @@ except ModuleNotFoundError:
     from pip.req import parse_requirements
 
 
+def _resolve_requirement(req: typing.Any) -> str:
+    if req.__class__.__name__ == "ParsedRequirement":
+        return str(req.requirement)
+    else:
+        return f"{req.name}{req.specifier}"
+
+
 def _read_requirements(
     filename: str="requirements.txt"
 ) -> typing.Dict[str, typing.List[str]]:
@@ -21,11 +28,7 @@ def _read_requirements(
         )
     reqs = list(parse_requirements(filename, session="jail"))
     return dict(
-        install_requires=list(map(lambda x: f"{x.name}{x.specifier}", reqs)),
-        dependency_links=list(map(
-            lambda x: str(x.link),
-            filter(lambda x: x.link, reqs)
-        ))
+        install_requires=[_resolve_requirement(req) for req in reqs]
     )
 
 
@@ -49,8 +52,7 @@ setup(
 	author="Stefan Grönke",
 	author_email="stefan@gronke.net",
 	python_requires=">=3.6",
-    install_requires=requirements["install_requires"],
-    dependency_links=requirements["dependency_links"],
+	install_requires=requirements["install_requires"],
 	tests_require=["pytest", "pytest-runner", "pytest-benchmark"],
 	packages=find_packages(exclude=("tests",))
 )
