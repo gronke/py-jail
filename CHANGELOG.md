@@ -1,4 +1,10 @@
-## 0.11.0 - 2020-04-23
+## 0.0.12 - 2020-08-20
+
+### Chore
+
+- Fix install after changes to Pip parse\_requirements
+
+## 0.0.11 - 2020-04-23
 
 ### Added
 
