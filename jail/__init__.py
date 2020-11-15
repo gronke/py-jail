@@ -30,6 +30,7 @@ import ipaddress
 import freebsd_sysctl
 import freebsd_sysctl.types
 
+from jail.__version__ import __version__
 from jail.libc import dll
 import jail.types
 
