@@ -34,10 +34,12 @@ in_addr_t = ctypes.c_uint32
 
 
 class in_addr(ctypes.BigEndianStructure):
+    """Internet IPv4 address."""
     _fields_ = [('s_addr', in_addr_t)]
 
 
 class in6_addr_U(ctypes.Union):
+    """Internet IPv6 address."""
     _fields_ = [
         ('__u6_addr8', ctypes.c_uint8 * 16),
         ('__u6_addr16', ctypes.c_uint16 * 8),
@@ -46,12 +48,14 @@ class in6_addr_U(ctypes.Union):
 
 
 class in6_addr(ctypes.Structure):
+    """Internet IPv6 address."""
     _fields_ = [
         ('__in6_u', in6_addr_U),
     ]
 
 
 def in6_addr_U_from_ip(ip6_address: ipaddress.IPv6Address) -> in6_addr_U:
+    """Return in7_addr_U from ipaddress.IPv6Address."""
 	return in6_addr_U(struct.unpack(
 		"B"*16,
 		bytes.fromhex(ip6_address.exploded.replace(":",""))
