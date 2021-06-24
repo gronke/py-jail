@@ -56,7 +56,7 @@ class in6_addr(ctypes.Structure):
 
 def in6_addr_U_from_ip(ip6_address: ipaddress.IPv6Address) -> in6_addr_U:
     """Return in7_addr_U from ipaddress.IPv6Address."""
-	return in6_addr_U(struct.unpack(
-		"B"*16,
-		bytes.fromhex(ip6_address.exploded.replace(":",""))
-	))
+    return in6_addr_U(struct.unpack(
+        "B"*16,
+        bytes.fromhex(ip6_address.exploded.replace(":",""))
+    ))
