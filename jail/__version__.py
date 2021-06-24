@@ -22,6 +22,6 @@
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 """Version of the jail module."""
-VERSION = (0, 0, 13)
+VERSION = (0, 0, 14)
 
 __version__ = '.'.join(map(str, VERSION))
