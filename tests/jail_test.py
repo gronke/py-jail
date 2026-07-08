@@ -21,6 +21,7 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+import gc
 import os.path
 import pytest
 import subprocess
@@ -158,3 +159,22 @@ def test_configure_ipv6_addresses_for_non_vnet_jail(
     finally:
         if jid > 0:
             subprocess.check_output([jail_command, "-r", str(jid)])
+
+
+def test_jail_set_reads_current_buffers_under_memory_churn() -> None:
+    name = "test-keepalive-churn"
+    jiov = jail.Jiov({"persist": None, "name": name, "path": "/rescue"})
+    pointer = jiov.pointer
+
+    gc.collect()
+    churn = [bytes(64) for _ in range(4096)]
+
+    jid = jail.dll.jail_set(pointer, len(jiov), 1)
+    try:
+        assert isinstance(jid, int)
+        assert jid > 0
+        assert jail.get_jid_by_name(name) == jid
+    finally:
+        subprocess.check_output([jail_command, "-r", str(jid)])
+
+    assert len(churn) == 4096
