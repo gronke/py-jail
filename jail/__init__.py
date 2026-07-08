@@ -74,6 +74,7 @@ class IovecKey:
             raise KeyError(
                 f"bytes or string expected, but got: {type(value).__name__}"
             )
+        self._iovec_buffer: typing.Optional[ctypes.Array] = None
 
     def __repr__(self) -> str:
         return self.__str__();
@@ -95,14 +96,16 @@ class IovecKey:
         return self.__hash__() == other.__hash__()
 
     @property
-    def iovec(self) -> ctypes.c_void_p:
-        return (Iovec(
-            ctypes.cast(
-                ctypes.c_char_p(bytes(self) + NULL_BYTES),
-                ctypes.c_void_p
-            ),
-            len(self) + len(NULL_BYTES)
-        ))
+    def iovec(self) -> Iovec:
+        # the kernel dereferences iov_base after this property returns,
+        # so the key owns its backing buffer for its whole lifetime
+        if self._iovec_buffer is None:
+            data = bytes(self) + NULL_BYTES
+            self._iovec_buffer = ctypes.create_string_buffer(data, len(data))
+        return Iovec(
+            ctypes.c_void_p(ctypes.addressof(self._iovec_buffer)),
+            len(self._iovec_buffer)
+        )
 
 
 RawIovecValue = typing.Optional[typing.Union[
@@ -123,6 +126,7 @@ IovecValueOutput = typing.Union[
 class IovecValue:
 
     _value: RawIovecValue
+    _iovec_buffer: typing.Any
 
     def __init__(
         self,
@@ -158,6 +162,7 @@ class IovecValue:
 
     @value.setter
     def value(self, value: RawIovecValue) -> None:
+        self._iovec_buffer = None
         if isinstance(value, list):
             self._value = value
         else:
@@ -200,46 +205,35 @@ class IovecValue:
         raise ValueError("cannot convert value to int")
 
     @property
-    def iovec(self) -> typing.Union[ctypes.POINTER, int]:
+    def iovec(self) -> Iovec:
+        # the kernel dereferences iov_base after this property returns,
+        # so the value owns its backing buffer for its whole lifetime
+        value = self.value
 
-        if self.value is None:
+        if value is None:
             return Iovec(ctypes.c_void_p(), 0)
 
-        elif isinstance(self.value, bytes) is True:
-            return Iovec(
-                ctypes.cast(
-                    ctypes.c_char_p(self.value + NULL_BYTES),
-                    ctypes.c_void_p
-                ),
-                self.__len__() + len(NULL_BYTES)
-            )
+        if self._iovec_buffer is None:
+            if isinstance(value, bytes) is True:
+                data = value + NULL_BYTES
+                self._iovec_buffer = ctypes.create_string_buffer(
+                    data,
+                    len(data)
+                )
+            elif isinstance(value, int) is True:
+                if not jail.types.MIN_INT <= value <= jail.types.MAX_INT:
+                    raise OverflowError("Integer parameter out of range")
+                self._iovec_buffer = ctypes.c_int(value)
+            elif isinstance(self._value, list) is True:
+                self._iovec_buffer = value
+            else:
+                # XXX: IP Addrs, JailSys Enums (new, inherit, disabled)
+                raise NotImplementedError
 
-        elif isinstance(self.value, int) is True:
-            if not jail.types.MIN_INT <= self.value <= jail.types.MAX_INT:
-                raise OverflowError("Integer parameter out of range")
-            return Iovec(
-                ctypes.cast(
-                    ctypes.POINTER(ctypes.c_int)(ctypes.c_int(self.value)),
-                    ctypes.c_void_p
-                ),
-                self.__len__()
-            )
-
-        elif isinstance(self._value, list) is True:
-            if len(self._value) == 0:
-                return Iovec(ctypes.c_void_p(), 0)
-            output_type = type(self.value[0])
-            return Iovec(
-                ctypes.cast(
-                    ctypes.POINTER(output_type)(self.value),
-                    ctypes.c_void_p
-                ),
-                ctypes.sizeof(output_type * len(self._value))
-            )
-
-        else:
-            # XXX: IP Addrs, JailSys Enums (new, inherit, disabled)
-            raise NotImplementedError
+        return Iovec(
+            ctypes.c_void_p(ctypes.addressof(self._iovec_buffer)),
+            ctypes.sizeof(self._iovec_buffer)
+        )
 
 
 class ByteDict(dict):
@@ -355,6 +349,7 @@ class Jiov(JiovData):
         ]
     ) -> None:
         self.errmsg = ctypes.create_string_buffer(256)
+        self._errmsg_key = ctypes.create_string_buffer(b"errmsg")
         super().__init__(params)
 
     def __len__(self) -> int:
@@ -373,20 +368,14 @@ class Jiov(JiovData):
 
         items.append(
             Iovec(
-                ctypes.cast(
-                    ctypes.c_char_p(b"errmsg\x00"),
-                    ctypes.c_void_p
-                ),
-                len(b"errmsg\x00")
+                ctypes.c_void_p(ctypes.addressof(self._errmsg_key)),
+                len(self._errmsg_key)
             )
         )
-        
+
         items.append(
             Iovec(
-                ctypes.cast(
-                    ctypes.POINTER(ctypes.c_char_p)(self.errmsg),
-                    ctypes.c_void_p
-                ),
+                ctypes.c_void_p(ctypes.addressof(self.errmsg)),
                 len(self.errmsg)
             )
         )
