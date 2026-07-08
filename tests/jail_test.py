@@ -78,7 +78,7 @@ def test_configure_ipv4_addresses_for_non_vnet_jail(
     bridge_interface: str
 ) -> None:
     subprocess.check_output(
-        [ifconfig_command, bridge_interface, "inet", str(ipv4_address)]
+        [ifconfig_command, bridge_interface, "inet", f"{ipv4_address}/24"]
     )
     jiov = jail.Jiov({
         "persist": None,
@@ -105,10 +105,10 @@ def test_configure_miltiple_ipv4_addresses_for_non_vnet_jail(
 
     print("IPS", str(ip1), str(ip2))
     subprocess.check_output(
-        [ifconfig_command, bridge_interface, "inet", str(ip1), "alias"]
+        [ifconfig_command, bridge_interface, "inet", f"{ip1}/24", "alias"]
     )
     subprocess.check_output(
-        [ifconfig_command, bridge_interface, "inet", str(ip2), "alias"]
+        [ifconfig_command, bridge_interface, "inet", f"{ip2}/32", "alias"]
     )
     jiov = jail.Jiov({
         "persist": None,
