@@ -23,8 +23,46 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """libc abstraction."""
 import ctypes
+import typing
+
 try:
-    dll = ctypes.CDLL("libc.so.7")
+    dll = ctypes.CDLL("libc.so.7", use_errno=True)
 except OSError:
     import ctypes.util
     dll = ctypes.CDLL(str(ctypes.util.find_library("c")), use_errno=True)
+
+_ARGTYPES = {
+    "jail_get": [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int],
+    "jail_set": [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int],
+    "jail_attach": [ctypes.c_int],
+    "jail_remove": [ctypes.c_int]
+}
+_prototypes: typing.Dict[str, typing.Any] = {}
+
+
+def _jail_func(name: str) -> typing.Any:
+    # the jail(2) family only exists in FreeBSD's libc, so each symbol is
+    # resolved on first use to keep the module importable on other platforms
+    prototype = _prototypes.get(name)
+    if prototype is None:
+        prototype = getattr(dll, name)
+        prototype.argtypes = _ARGTYPES[name]
+        prototype.restype = ctypes.c_int
+        _prototypes[name] = prototype
+    return prototype
+
+
+def jail_get(iov: typing.Any, niov: int, flags: int) -> int:
+    return int(_jail_func("jail_get")(iov, niov, flags))
+
+
+def jail_set(iov: typing.Any, niov: int, flags: int) -> int:
+    return int(_jail_func("jail_set")(iov, niov, flags))
+
+
+def jail_attach(jid: int) -> int:
+    return int(_jail_func("jail_attach")(jid))
+
+
+def jail_remove(jid: int) -> int:
+    return int(_jail_func("jail_remove")(jid))

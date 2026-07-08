@@ -32,10 +32,28 @@ import freebsd_sysctl.types
 
 from jail.__version__ import __version__
 from jail.libc import dll
+import jail.libc
 import jail.types
 
 NULL_BYTES = b"\x00"
-JAIL_MAX_AF_IPS = freebsd_sysctl.Sysctl("security.jail.jail_max_af_ips").value
+_JAIL_MAX_AF_IPS: typing.Optional[int] = None
+
+
+def _jail_max_af_ips() -> int:
+    global _JAIL_MAX_AF_IPS
+    if _JAIL_MAX_AF_IPS is None:
+        _JAIL_MAX_AF_IPS = int(
+            freebsd_sysctl.Sysctl("security.jail.jail_max_af_ips").value
+        )
+    return _JAIL_MAX_AF_IPS
+
+
+def __getattr__(name: str) -> typing.Any:
+    # JAIL_MAX_AF_IPS reads a sysctl, so it resolves on first access to
+    # keep the module importable on other platforms
+    if name == "JAIL_MAX_AF_IPS":
+        return _jail_max_af_ips()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class Iovec(ctypes.Structure):
@@ -118,7 +136,7 @@ class IovecValue:
         if isinstance(value, list):
             if len(value) == 0:
                 return None
-            elif len(value) > JAIL_MAX_AF_IPS:
+            elif len(value) > _jail_max_af_ips():
                 raise ValueError("Too many IPs (max {JAIL_MAX_AF_IPS}")
             elif isinstance(value[0], ipaddress.IPv4Address):
                 list_type = jail.types.in_addr
@@ -381,12 +399,12 @@ def get_jid_by_name(name: typing.Union[str, bytes]) -> int:
         raise TypeError("bytes required")
 
     jiov = jail.Jiov(dict(name=name))
-    return int(jail.dll.jail_get(jiov.pointer, len(jiov), 0))
+    return jail.libc.jail_get(jiov.pointer, len(jiov), 0)
 
 def is_jid_dying(jid: int) -> bool:
     jiov = jail.Jiov(dict(jid=jid,dying=0))
     JAIL_DYING = 0x08
-    if jail.dll.jail_get(jiov.pointer, len(jiov), JAIL_DYING) < 0:
+    if jail.libc.jail_get(jiov.pointer, len(jiov), JAIL_DYING) < 0:
         return False  # jid does not exist
     return (int(jiov[IovecKey("dying")]) > 0) is True
 
