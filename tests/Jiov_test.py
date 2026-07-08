@@ -72,3 +72,10 @@ def test_jiov_buffers_survive_garbage_collection():
     assert entries[7].iov_size == 256
 
     assert len(churn) == 8192
+
+
+def test_jail_flag_constants():
+    assert jail.JAIL_CREATE == 0x01
+    assert jail.JAIL_UPDATE == 0x02
+    assert jail.JAIL_ATTACH == 0x04
+    assert jail.JAIL_DYING == 0x08

@@ -21,6 +21,7 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+import errno
 import gc
 import os.path
 import pytest
@@ -178,3 +179,46 @@ def test_jail_set_reads_current_buffers_under_memory_churn() -> None:
         subprocess.check_output([jail_command, "-r", str(jid)])
 
     assert len(churn) == 4096
+
+
+def test_jail_set_duplicate_raises_with_kernel_errmsg() -> None:
+    jiov = jail.Jiov({"persist": None, "path": "/rescue"})
+    jid = jail.jail_set(jiov)
+    try:
+        duplicate = jail.Jiov({"persist": None, "jid": jid, "path": "/rescue"})
+        with pytest.raises(OSError) as excinfo:
+            jail.jail_set(duplicate)
+        assert excinfo.value.errno == errno.EEXIST
+        assert f"jail {jid} already exists" == excinfo.value.strerror
+    finally:
+        jail.jail_remove(jid)
+
+
+def test_jail_remove_missing_jid_raises() -> None:
+    with pytest.raises(OSError) as excinfo:
+        jail.jail_remove(999999)
+    assert excinfo.value.errno == errno.EINVAL
+
+
+def test_jail_attach_missing_jid_raises() -> None:
+    with pytest.raises(OSError) as excinfo:
+        jail.jail_attach(999999)
+    assert excinfo.value.errno == errno.EINVAL
+
+
+def test_jail_attach_moves_child_process_root() -> None:
+    jiov = jail.Jiov({"persist": None, "name": "test-attach", "path": "/rescue"})
+    jid = jail.jail_set(jiov)
+    try:
+        child_code = "; ".join([
+            "import os",
+            "import jail",
+            f"jail.jail_attach({jid})",
+            # inside the jail /rescue is the crunchgen master binary,
+            # not the host directory the jail is rooted at
+            "assert os.path.isdir('/rescue') is False",
+            "assert os.path.isfile('/sh') is True"
+        ])
+        subprocess.run([sys.executable, "-c", child_code], check=True)
+    finally:
+        jail.jail_remove(jid)
