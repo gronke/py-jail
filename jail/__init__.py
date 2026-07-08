@@ -24,8 +24,10 @@
 """FreeBSD jail sysctl bindings."""
 import typing
 import ctypes
+import errno
 import itertools
 import ipaddress
+import os
 
 import freebsd_sysctl
 import freebsd_sysctl.types
@@ -54,6 +56,12 @@ def __getattr__(name: str) -> typing.Any:
     if name == "JAIL_MAX_AF_IPS":
         return _jail_max_af_ips()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+JAIL_CREATE = 0x01
+JAIL_UPDATE = 0x02
+JAIL_ATTACH = 0x04
+JAIL_DYING = 0x08
 
 
 class Iovec(ctypes.Structure):
@@ -383,17 +391,61 @@ class Jiov(JiovData):
         return (Iovec * len(items))(*items)
 
 
+def _raise_jail_error(jiov: Jiov) -> typing.NoReturn:
+    code = ctypes.get_errno()
+    errmsg = jiov.errmsg.value.decode("UTF-8", "replace")
+    raise OSError(code, errmsg if errmsg else os.strerror(code))
+
+
+def jail_set(jiov: Jiov, flags: int = JAIL_CREATE) -> int:
+    """Create or update a jail and return its jid."""
+    jid = jail.libc.jail_set(jiov.pointer, len(jiov), flags)
+    if jid < 0:
+        _raise_jail_error(jiov)
+    return jid
+
+
+def jail_get(jiov: Jiov, flags: int = 0) -> int:
+    """Read the parameters of a jail into the Jiov and return its jid."""
+    jid = jail.libc.jail_get(jiov.pointer, len(jiov), flags)
+    if jid < 0:
+        _raise_jail_error(jiov)
+    return jid
+
+
+def jail_attach(jid: int) -> None:
+    """Imprison the current process into the jail."""
+    if jail.libc.jail_attach(jid) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code))
+
+
+def jail_remove(jid: int) -> None:
+    """Remove the jail, killing all processes in it."""
+    if jail.libc.jail_remove(jid) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code))
+
+
 def get_jid_by_name(name: typing.Union[str, bytes]) -> int:
     if (isinstance(name, str) or isinstance(name, bytes)) is False:
         raise TypeError("bytes required")
 
     jiov = jail.Jiov(dict(name=name))
-    return jail.libc.jail_get(jiov.pointer, len(jiov), 0)
+    try:
+        return jail_get(jiov)
+    except OSError as err:
+        if err.errno == errno.ENOENT:
+            return -1
+        raise
 
 def is_jid_dying(jid: int) -> bool:
     jiov = jail.Jiov(dict(jid=jid,dying=0))
-    JAIL_DYING = 0x08
-    if jail.libc.jail_get(jiov.pointer, len(jiov), JAIL_DYING) < 0:
-        return False  # jid does not exist
+    try:
+        jail_get(jiov, JAIL_DYING)
+    except OSError as err:
+        if err.errno == errno.ENOENT:
+            return False  # jid does not exist
+        raise
     return (int(jiov[IovecKey("dying")]) > 0) is True
 
