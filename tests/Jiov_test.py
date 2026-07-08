@@ -21,6 +21,8 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+import ctypes
+import gc
 import os.path
 import pytest
 import subprocess
@@ -43,3 +45,30 @@ def test_jiov_length():
     struct_length = (len(data) + 1) * 2  # (data + errmsg) key/value pairs
     assert len(jiov.struct) == struct_length
     assert len(jiov) == struct_length
+
+
+def test_jiov_buffers_survive_garbage_collection():
+    jiov = jail.Jiov(dict(name="keepalive", jid=23, persist=None))
+    pointer = jiov.pointer
+
+    gc.collect()
+    # allocations of every small size class, so freed blocks get reused
+    churn = [b"\xff" * (1 + i % 64) for i in range(8192)]
+
+    entries = pointer.contents
+    assert len(entries) == len(jiov)
+    assert ctypes.string_at(entries[0].iov_base, entries[0].iov_size) \
+        == b"name\x00"
+    assert ctypes.string_at(entries[1].iov_base, entries[1].iov_size) \
+        == b"keepalive\x00"
+    assert ctypes.string_at(entries[2].iov_base, entries[2].iov_size) \
+        == b"jid\x00"
+    assert ctypes.c_int.from_address(entries[3].iov_base).value == 23
+    assert ctypes.string_at(entries[4].iov_base, entries[4].iov_size) \
+        == b"persist\x00"
+    assert entries[5].iov_base is None
+    assert ctypes.string_at(entries[6].iov_base, entries[6].iov_size) \
+        == b"errmsg\x00"
+    assert entries[7].iov_size == 256
+
+    assert len(churn) == 8192
