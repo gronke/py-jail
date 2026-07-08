@@ -19,6 +19,18 @@ jobs:
       - run: python -m build
       - run: python -m twine check dist/*
 
+  test-linux:
+    name: Unit tests on Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest pytest-benchmark "freebsd-sysctl @ git+https://github.com/gronke/py-freebsd_sysctl@92f6cf5dd4cab3a9b7e4ef04c4ca0dbeec74e181"
+      - run: python -m pip install --no-deps .
+      - run: python -m pytest tests/IovecValue_test.py tests/Jiov_test.py -v --benchmark-disable
+
   test-freebsd:
     name: Test on FreeBSD ${{ matrix.release }}
     runs-on: ubuntu-latest
